@@ -79,6 +79,6 @@ update. Settings load at startup, so restart after editing.
 
 ## Credits
 
-Original work. No code from any other mod was used. Runs on UE4SS, which is not
+UE4SS was used for data collection and the development of this mod, and is not
 bundled. The Blood of Dawnwalker is © Rebel Wolves; this mod is unofficial and
 ships no game assets. Released under the MIT Licence.
