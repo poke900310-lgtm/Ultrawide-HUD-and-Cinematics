@@ -1,0 +1,7 @@
+# Normalize line endings so the shipped files are consistent everywhere.
+* text=auto eol=lf
+
+# Binary-ish assets, if any are ever added, should never be normalized.
+*.usmap binary
+*.pak binary
+*.zip binary

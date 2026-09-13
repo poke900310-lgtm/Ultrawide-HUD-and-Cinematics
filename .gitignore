@@ -1,0 +1,26 @@
+# Competitor mods studied for lineage only — not ours to redistribute
+/research/
+
+# Build output
+/dist/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local user config and runtime logs (never part of the source)
+Ultrawide.ini
+**/Ultrawide.ini
+*.log
+
+# Secrets — must never be committed
+.nexus-key
+*.aes
+*.usmap
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*~
