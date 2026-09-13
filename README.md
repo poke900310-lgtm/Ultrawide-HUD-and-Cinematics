@@ -87,8 +87,8 @@ keeps the authored vertical FOV and widens horizontally.
 
 ## Credits
 
-Original work; no code from any other mod was used. Runs on
-[UE4SS](https://github.com/UE4SS-RE/RE-UE4SS) (MIT), which is not bundled.
+[UE4SS](https://github.com/UE4SS-RE/RE-UE4SS) (MIT) was used for data collection
+and the development of this mod, and is not bundled.
 
 The Blood of Dawnwalker is © Rebel Wolves; this mod is unofficial and ships no
 game assets. Released under the MIT Licence — see `LICENSE.txt`.
