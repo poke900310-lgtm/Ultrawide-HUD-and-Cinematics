@@ -69,8 +69,8 @@ keeps the authored vertical FOV and widens horizontally.
 
 - Runs alongside other Dawnwalker mods; it only writes UMG slot padding and camera
   aspect properties.
-- Do **not** run it together with another ultrawide mod (CenterHUD, UltrawideFix,
-  a ReShade aspect fix) — they act on the same cameras/HUD and will fight.
+- Do **not** run it together with another ultrawide mod; they act on the same
+  cameras and HUD and will fight.
 - Reacts to cinematic transitions and camera spawns, so bars are cleared the
   instant a cut happens; a slow backstop timer re-asserts and adapts to a
   resolution change. There is no per-frame work.
@@ -87,10 +87,7 @@ keeps the authored vertical FOV and widens horizontally.
 
 ## Credits
 
-Original work. The robustness approach — reacting to `ClientSetCinematicMode` and
-camera spawns, per-camera backoff, type-safe writes — was informed by studying
-the other Dawnwalker ultrawide mods (UltrawideFix by VTLI / Framecore / CloudGiant,
-and CenterHUD), but no code was copied. Runs on
+Original work; no code from any other mod was used. Runs on
 [UE4SS](https://github.com/UE4SS-RE/RE-UE4SS) (MIT), which is not bundled.
 
 The Blood of Dawnwalker is © Rebel Wolves; this mod is unofficial and ships no

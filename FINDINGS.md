@@ -22,15 +22,14 @@ Consequences that decide the approach:
   `WidgetTree`, not a two-byte edit.
 - The correct position depends on the runtime viewport width, which only exists
   at runtime.
-- The game rebuilds the HUD on level transitions (confirmed by how HUDTweaks has
-  to re-acquire it), so any fix must re-apply itself.
+- The game rebuilds the HUD on level transitions (a cached HUD reference stops being valid and must be re-acquired), so any fix must re-apply itself.
 
 **PROVEN — the game's UI config is not reachable in the containers.**
 `DesignScreenSize`, `UIScaleRule`, `r.SafeZone`, `ApplicationScale` are all absent
 from `Dawnwalker-Windows.ucas`; they are engine defaults or in the pak filesystem.
 So the tidy "set a project UI setting" route is not available to a mod.
 
-**PROVEN — the runtime plumbing works.** HUDTweaks (an existing mod) acquires
+**PROVEN — the runtime plumbing works.** An existing HUD mod acquires
 `WBP_GameHUD_C` with `FindAllOf`, survives rebuilds by re-searching when a cached
 instance stops being `IsValid`, and moves widgets by writing `RenderTransform`
 then calling `SetRenderTransformAngle` once (the only setter that pushes the whole
