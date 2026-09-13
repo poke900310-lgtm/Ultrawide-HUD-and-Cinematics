@@ -1,4 +1,4 @@
-local VERSION = "1.0.0"
+local VERSION = "1.0.1"
 local HUD_CLASS = "WBP_GameHUD_C"
 local HUD_PATH = "/Game/_Dawnwalker/UI/_Unified/HUD/WBP_GameHUD.WBP_GameHUD_C"
 local CAM_CLASS = "/Script/Engine.CameraComponent"
@@ -131,6 +131,7 @@ local function restoreHud()
 end
 local watched, seen = {}, {}
 local function enforceCam(cam)
+    if not (Cfg.Enabled and Cfg.RemoveCinematicBars) then return 0 end
     if not alive(cam) then return 0 end
     local made = 0
     if member(cam, "bConstrainAspectRatio") == true then
@@ -186,7 +187,7 @@ local function beat()
 end
 local function toggle()
     Cfg.Enabled = not Cfg.Enabled
-    if Cfg.Enabled then log(">>> Ultrawide ENABLED"); applyHud(true); wakeCams()
+    if Cfg.Enabled then log(">>> Ultrawide ENABLED"); applyHud(true); rescanCams(); wakeCams()
     else log("<<< Ultrawide DISABLED"); restoreHud() end
 end
 log("")

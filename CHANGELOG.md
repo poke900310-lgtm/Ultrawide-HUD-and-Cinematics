@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.1 — 2026-09-13
+
+Bug fixes from an independent code review. Three validators checked every
+reported claim; only the defects all three confirmed were changed.
+
+### Fixed
+- Disabling the mod now fully stops the cinematic fix. The camera enforcement
+  path was not gated on the enabled flag, so a cinematic transition could still
+  clear the aspect constraint on already-tracked cameras while the mod was off.
+- Re-enabling now rescans existing cameras, so a camera that appeared while the
+  mod was disabled (including when started with `Enabled = false`) is picked up.
+- The shipped README no longer points to `FINDINGS.md` as if it were in the
+  download; it notes the file lives in the project repository.
+
 ## 1.0.0 — 2026-09-13
 
 First public release.

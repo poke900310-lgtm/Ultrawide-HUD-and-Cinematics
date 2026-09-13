@@ -58,7 +58,7 @@ to leave the HUD spread wide and only use the cinematic fix.
 
 ## How it works
 
-See `FINDINGS.md` for the full investigation. In short: the HUD (`WBP_GameHUD_C`)
+See `FINDINGS.md` in the project repository for the full investigation. In short: the HUD (`WBP_GameHUD_C`)
 has no canvas anchors — its containers are box-aligned against the viewport — so
 the fix adds equal left/right padding to each container's slot, which recentres
 every alignment type without scaling. The bars are `bConstrainAspectRatio` on the
