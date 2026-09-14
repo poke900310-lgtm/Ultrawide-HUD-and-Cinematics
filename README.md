@@ -45,6 +45,7 @@ startup; restart after editing.
 
 | Setting | Default | Effect |
 |---|---|---|
+| `Enabled` | `true` | Master switch. Turn the whole mod off. |
 | `HudAspect` | `16:9` | Aspect of the centred box the HUD is confined to. Accepts `16:9`, `21:9`, or a number like `1.777778`. |
 | `HudWidthOffset` | `0` | Nudge the HUD further inward (+) or outward (−), in layout pixels. |
 | `RecenterHUD` | `true` | Turn off to leave the HUD alone and only fix cinematics. |
