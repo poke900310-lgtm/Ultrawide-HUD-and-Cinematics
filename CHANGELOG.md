@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.2 — 2026-09-15
+
+Crash fix. Two access-violation crashes were traced to the camera de-bar path
+holding camera references across game ticks: a camera destroyed during rapid
+cinematic transitions (spamming skip through dialogue) could then be reached
+through a stale handle, which even a validity check cannot safely test. The fix
+came from three independent design passes that converged on the same approach.
+
+### Fixed
+- The camera de-bar no longer keeps a persistent list of cameras. Each pass now
+  looks up the currently-live cameras fresh and de-bars them in the same step,
+  holding no reference past it, so a camera freed during rapid dialogue-skipping
+  can no longer be reached through a stale handle.
+- Spawn and cinematic-transition triggers are coalesced, so rapid skipping no
+  longer stacks async callbacks.
+- The camera scan now runs only while a cinematic is actually active (read from
+  the player controller's cinematic-mode state), so normal gameplay does no
+  object-array walks at all. It still catches mid-cinematic camera cuts.
+
 ## 1.0.1 — 2026-09-13
 
 Bug fixes from an independent code review. Three validators checked every
