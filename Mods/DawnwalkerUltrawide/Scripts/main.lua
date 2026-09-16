@@ -1,10 +1,9 @@
-local VERSION = "1.0.1"
+local VERSION = "1.0.2"
 local HUD_CLASS = "WBP_GameHUD_C"
 local HUD_PATH = "/Game/_Dawnwalker/UI/_Unified/HUD/WBP_GameHUD.WBP_GameHUD_C"
 local CAM_CLASS = "/Script/Engine.CameraComponent"
 local MAINTAIN_YFOV = 0
 local MAINTAIN_XFOV = 1
-local CALM_MAX = 6
 local BACKSTOP_MS = 5000
 local RECHECK_MS = 300
 local dir = debug.getinfo(1, "S").source:match("^@(.*[/\\])") or ""
@@ -129,7 +128,11 @@ local function restoreHud()
         if alive(slot) then pcall(function() slot:SetPadding({ Left = 0, Top = 0, Right = 0, Bottom = 0 }) end) end end
     lastInset = nil
 end
-local watched, seen = {}, {}
+-- Camera de-bar: enforce-then-forget. No camera reference is ever held past the
+-- synchronous pass that obtained it fresh from FindAllOf, so a camera destroyed
+-- during rapid cinematic churn can never be reached through a stale handle. UE4SS
+-- exposes no non-dereferencing validity test to Lua, so freshness of enumeration
+-- is the only safe primitive: look up every live camera this tick, act, and drop it.
 local function enforceCam(cam)
     if not (Cfg.Enabled and Cfg.RemoveCinematicBars) then return 0 end
     if not alive(cam) then return 0 end
@@ -142,52 +145,49 @@ local function enforceCam(cam)
     end
     return made
 end
-local function watch(cam)
-    if not (Cfg.Enabled and Cfg.RemoveCinematicBars) or not alive(cam) then return end
-    local id = fullName(cam); if id == "" or seen[id] then return end
-    watched[#watched + 1] = { cam = cam, id = id, calm = 0, due = 0 }
-    seen[id] = true
-    enforceCam(cam)
-end
-local function rescanCams()
+local function enforceAllCams()
     if not (Cfg.Enabled and Cfg.RemoveCinematicBars) then return end
     local ok, all = pcall(FindAllOf, "CameraComponent")
-    if ok and type(all) == "table" then for _, c in pairs(all) do watch(c) end end
+    if not (ok and type(all) == "table") then return end
+    local n = 0
+    for _, c in pairs(all) do if enforceCam(c) > 0 then n = n + 1 end end
+    if n > 0 then log("de-barred %d camera(s)", n) end
 end
-local function sweepCams()
-    local count, i = #watched, 1
-    while i <= count do
-        local s = watched[i]
-        if s.due > 0 then s.due = s.due - 1; i = i + 1
-        elseif alive(s.cam) and fullName(s.cam) == s.id then
-            if enforceCam(s.cam) > 0 then s.calm = 0 elseif s.calm < CALM_MAX then s.calm = s.calm + 1 end
-            s.due = s.calm; i = i + 1
-        else seen[s.id] = nil; watched[i] = watched[count]; watched[count] = nil; count = count - 1 end
+-- Cinematic gate: the full FindAllOf camera scan runs only while a cinematic is
+-- active, so normal gameplay never walks the object array. APlayerController's
+-- bCinematicMode (the engine's SetCinematicMode writes it on both ends) is the
+-- per-beat ground truth; the ClientSetCinematicMode hook is the immediate edge.
+-- If neither can be read the gate fails safe to active, so de-barring is never
+-- silently lost. Triggers are coalesced: a burst queues at most one deferred scan
+-- and one delayed recheck, so rapid skipping cannot stack async callbacks.
+local cine = false   -- last hook arg: false = exited; true/nil = entered or unreadable
+local function cineActive()
+    if not alive(pc) then pc = FindFirstOf("PlayerController") end
+    local m = member(pc, "bCinematicMode")
+    if type(m) == "boolean" then return m end
+    return cine ~= false
+end
+local scanPending, recheckPending = false, false
+local function scanCams()
+    if scanPending or not cineActive() then return end
+    scanPending = true
+    if not pcall(ExecuteInGameThread, function() scanPending = false; pcall(enforceAllCams) end) then
+        scanPending = false
     end
 end
-local lastWake = -1
-local function wakeCams()
-    for _, s in ipairs(watched) do s.due = 0 end
-    local now = os.clock()
-    if now - lastWake < 0.5 then return end
-    lastWake = now
-    sweepCams()
-end
 local function scheduleRecheck()
-    if rawget(_G, "ExecuteWithDelay") == nil then return end
+    if recheckPending or not cineActive() or rawget(_G, "ExecuteWithDelay") == nil then return end
+    recheckPending = true
     pcall(ExecuteWithDelay, RECHECK_MS, function()
-        ExecuteInGameThread(function()
-            for _, s in ipairs(watched) do s.due = 0 end
-            pcall(sweepCams)
-        end)
+        ExecuteInGameThread(function() recheckPending = false; pcall(enforceAllCams) end)
     end)
 end
 local function beat()
-    if Cfg.Enabled then applyHud(false); sweepCams() end
+    if Cfg.Enabled then applyHud(false); if cineActive() then enforceAllCams() end end
 end
 local function toggle()
     Cfg.Enabled = not Cfg.Enabled
-    if Cfg.Enabled then log(">>> Ultrawide ENABLED"); applyHud(true); rescanCams(); wakeCams()
+    if Cfg.Enabled then log(">>> Ultrawide ENABLED"); applyHud(true); enforceAllCams()
     else log("<<< Ultrawide DISABLED"); restoreHud() end
 end
 log("")
@@ -197,16 +197,9 @@ if MISSING then
 end
 log("Dawnwalker Ultrawide %s loaded (HUD %s @ %.3f, de-bars %s @ any resolution)",
     VERSION, tostring(Cfg.RecenterHUD), Cfg.HudAspect, tostring(Cfg.RemoveCinematicBars))
-local queued, draining = {}, false
 pcall(function()
-    NotifyOnNewObject(CAM_CLASS, function(c)
-        queued[#queued + 1] = c
-        if not draining then
-            if pcall(ExecuteInGameThread, function() draining = false
-                local batch = queued; queued = {}
-                for _, c2 in ipairs(batch) do pcall(watch, c2) end
-                scheduleRecheck() end) then draining = true end
-        end
+    NotifyOnNewObject(CAM_CLASS, function()   -- the spawned camera is not stored; it only signals a fresh scan is due
+        scanCams(); scheduleRecheck()
     end)
 end)
 pcall(function()
@@ -216,7 +209,11 @@ pcall(function()
 end)
 pcall(function()
     RegisterHook("/Script/Engine.PlayerController:ClientSetCinematicMode",
-        function() ExecuteInGameThread(function() pcall(wakeCams) end); scheduleRecheck() end)
+        function(_, p1)
+            local ok, v = pcall(function() return p1:get() end)
+            cine = (ok and type(v) == "boolean") and v or nil   -- nil = fired but unreadable -> treated as active
+            scanCams(); scheduleRecheck()
+        end)
 end)
 if Cfg.ToggleKey ~= "" and rawget(_G, "RegisterKeyBind") and rawget(_G, "Key") and rawget(_G, "IsKeyBindRegistered") then
     pcall(function() local k = Key[Cfg.ToggleKey:upper()]
@@ -224,7 +221,7 @@ if Cfg.ToggleKey ~= "" and rawget(_G, "RegisterKeyBind") and rawget(_G, "Key") a
             RegisterKeyBind(k, {}, function() ExecuteInGameThread(function() pcall(toggle) end) end)
             log("toggle key %s bound", Cfg.ToggleKey) end end)
 end
-pcall(function() ExecuteInGameThread(function() pcall(applyHud, true); pcall(rescanCams) end) end)
+pcall(function() ExecuteInGameThread(function() pcall(applyHud, true); pcall(enforceAllCams) end) end)
 local pending = false
 pcall(function()
     LoopAsync(BACKSTOP_MS, function()
