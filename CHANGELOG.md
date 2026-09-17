@@ -1,6 +1,40 @@
 # Changelog
 
-## 1.0.2 — 2026-09-15
+## 1.0.3 — 2026-09-17
+
+A major reliability and correctness overhaul — the first update since 1.0.1. The
+cinematic bar removal was rebuilt to be crash-safe and to touch only the camera
+you are actually looking through, and a HUD recentre bug that displaced HUD
+elements was fixed.
+
+### Fixed
+- **Crash safety.** The player controller and the HUD widget are no longer kept
+  from one game tick to the next. On a level or save load the engine frees them,
+  and even a validity check on a freed handle can itself fault; the controller is
+  now re-derived every pass from live engine state (with a fresh fallback lookup)
+  and the HUD is found fresh, so a stale handle can never be reached. This closes
+  the access-violation crashes seen on loads and during rapid dialogue skipping.
+- **HUD padding no longer destroyed.** Recentring previously overwrote every HUD
+  container's padding and zeroed the top/bottom (and left/right) offsets the game
+  authors to keep elements apart — which could make the weapon / special-ability
+  icon overlap the quick-slot bar, most visibly at 21:9, and did not clear even
+  with the inset forced to zero. It now captures each container's original padding
+  once and only adds the recentre inset to the sides, preserving the game's own
+  spacing; turning the mod off restores that original padding instead of zeroing
+  it. Thanks to the player who reported and diagnosed the overlap.
+
+### Changed
+- **Cinematic bars are cleared preemptively, one camera at a time.** Instead of
+  scanning every camera in the game on each pass, each camera is de-barred the
+  instant it is created — before it can ever be shown — and the on-screen camera
+  is resolved directly from the camera manager. No per-frame work and no full
+  object-array scan remain; normal gameplay does essentially nothing.
+
+### Added
+- **`Trace` setting** (off by default) for detailed per-pass diagnostics when
+  reporting a bug, plus timestamps on log lines.
+
+## 1.0.2 — 2026-09-15 (internal; not released, superseded by 1.0.3)
 
 Crash fix. Two access-violation crashes were traced to the camera de-bar path
 holding camera references across game ticks: a camera destroyed during rapid
