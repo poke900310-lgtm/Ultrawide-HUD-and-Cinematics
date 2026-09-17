@@ -54,6 +54,7 @@ RemoveCinematicBars = true
 KeepVerticalFov = true
 ToggleKey =
 Verbose = false
+Trace = false
 ```
 
 `HudAspect` is the aspect of the centered box the HUD is confined to; set it to your display, or to a value wider than your screen to leave the HUD spread out and only use the cinematic fix. `HudWidthOffset` nudges the HUD further in or out. Settings load at startup, so restart the game after editing.

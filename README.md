@@ -53,6 +53,7 @@ startup; restart after editing.
 | `KeepVerticalFov` | `true` | Widen horizontally (reveal scene). `false` keeps horizontal FOV and crops top/bottom — rarely wanted. |
 | `ToggleKey` | *(none)* | Optional UE4SS key name (e.g. `INS`) to toggle the mod in game. |
 | `Verbose` | `false` | Also write `Ultrawide.log` beside `main.lua`. |
+| `Trace` | `false` | Extra diagnostic lines (camera passes, HUD padding capture, hook firings) for bug reports. Combine with `Verbose` to capture them in the log. |
 
 Set the HUD to your own display, e.g. `HudAspect = 21:9`, or `HudAspect = 32:9`
 to leave the HUD spread wide and only use the cinematic fix.
