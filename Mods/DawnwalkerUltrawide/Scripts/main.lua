@@ -1,7 +1,8 @@
-local VERSION = "1.0.3"
+local VERSION = "1.0.4"
 local HUD_CLASS = "WBP_GameHUD_C"
 local HUD_PATH = "/Game/_Dawnwalker/UI/_Unified/HUD/WBP_GameHUD.WBP_GameHUD_C"
 local CAM_CLASS = "/Script/Engine.CameraComponent"
+local CAM_PROPS = { "CameraComponent", "DialogueCameraComponent" }   -- named camera subobjects camsOf checks; hoisted so the list is not rebuilt per call
 local MAINTAIN_YFOV = 0
 local MAINTAIN_XFOV = 1
 local BACKSTOP_MS = 5000
@@ -95,6 +96,8 @@ end
 local wll, engine
 local function _vpSize(w, p) local s = w:GetViewportSize(p); return s.X, s.Y end
 local function _vpScale(w, p) return w:GetViewportScale(p) end
+local function _compByClass(a, cls) return a:GetComponentByClass(cls) end   -- named thunk (like _vpSize) so pcall mints no per-call closure
+local function _get(o) return o:get() end
 local function anchors()
     if not alive(wll) then wll = StaticFindObject("/Script/UMG.Default__WidgetLayoutLibrary") end
     if not alive(engine) then engine = FindFirstOf("GameEngine") end   -- process-lifetime; at most one scan, only until found
@@ -125,6 +128,8 @@ local basePad = {}   -- container fullName -> its ORIGINAL padding {l,t,r,b} (nu
 -- NOTE: a UE4SS mod hot-reload (not a game restart) re-runs this file with basePad empty while the live HUD still carries the
 -- previous inset, so it re-captures the modified padding as "base" and insets twice until the next real HUD rebuild / restart.
 -- Shipped users never hot-reload, so this is left unguarded on purpose (any heuristic guard risks misreading authored padding).
+local function isCDO(o) return fullName(o):find("Default__", 1, true) ~= nil end
+local function debarOn() return Cfg.Enabled and Cfg.RemoveCinematicBars end
 local function padOf(slot)   -- read the slot's current FMargin; degrades to nil if unreadable
     local m = member(slot, "Padding"); if m == nil then return nil end
     local function g(k) local ok, v = pcall(_index, m, k); return (ok and type(v) == "number") and v or 0 end
@@ -134,7 +139,7 @@ local function findHuds()   -- every live non-CDO instance, fresh each call; not
     local out = {}
     local ok, all = pcall(FindAllOf, HUD_CLASS)
     if ok and type(all) == "table" then for _, x in pairs(all) do
-        if alive(x) and not fullName(x):find("Default__", 1, true) then out[#out + 1] = x end end end
+        if alive(x) and not isCDO(x) then out[#out + 1] = x end end end
     return out
 end
 local function hudChildren(h)
@@ -146,6 +151,9 @@ local function hudChildren(h)
     for i = 0, n - 1 do local okc, ch = pcall(function() return root:GetChildAt(i) end)
         if okc and alive(ch) then out[#out + 1] = ch end end
     return out
+end
+local function setPad(slot, l, t, r, b)   -- one pcall-guarded SetPadding with the FMargin shape written once
+    return pcall(function() slot:SetPadding({ Left = l, Top = t, Right = r, Bottom = b }) end)
 end
 local function applyHud(force)
     if not (Cfg.Enabled and Cfg.RecenterHUD) then return end
@@ -168,7 +176,7 @@ local function applyHud(force)
                     end
                 end
                 -- offset FROM the base: add the recentre inset to left/right, keep the game's own top/bottom (and base left/right)
-                if pcall(function() slot:SetPadding({ Left = base.l + inset, Top = base.t, Right = base.r + inset, Bottom = base.b }) end) then n = n + 1 end
+                if setPad(slot, base.l + inset, base.t, base.r + inset, base.b) then n = n + 1 end
             end
         end
     end
@@ -181,8 +189,7 @@ local function restoreHud()
             for _, ch in ipairs(hudChildren(h2)) do
                 local base = basePad[fullName(ch)]
                 if base then local slot = member(ch, "Slot")
-                    if alive(slot) then pcall(function()
-                        slot:SetPadding({ Left = base.l, Top = base.t, Right = base.r, Bottom = base.b }) end) end end
+                    if alive(slot) then setPad(slot, base.l, base.t, base.r, base.b) end end
             end
         end
     end
@@ -198,7 +205,7 @@ end
 -- exposes no non-dereferencing validity test to Lua, so freshness of lookup is the
 -- only safe primitive: resolve this tick, act, and drop every handle.
 local function enforceCam(cam)
-    if not (Cfg.Enabled and Cfg.RemoveCinematicBars) then return 0 end
+    if not debarOn() then return 0 end
     if not alive(cam) then return 0 end
     local made = 0
     if member(cam, "bConstrainAspectRatio") == true then
@@ -226,24 +233,26 @@ end
 -- The camera component(s) the manager renders `actor` through: at most two named
 -- subobjects, plus one GetComponentByClass call only when the actor is not a named
 -- camera actor AND bars are actually on screen. Never walks the object array.
+local function addCam(out, seen, c)   -- dedupe by full name, append the live camera component; shared by both camsOf branches
+    local id = fullName(c)
+    if id ~= "" and not seen[id] then seen[id] = true; out[#out + 1] = c end
+end
 local function camsOf(actor, out, seen, barred)
     if not alive(actor) then return false end
     local isCamActor = false
-    for _, prop in ipairs({ "CameraComponent", "DialogueCameraComponent" }) do
+    for _, prop in ipairs(CAM_PROPS) do
         local c = member(actor, prop)
         if alive(c) then
             isCamActor = true
-            local id = fullName(c)
-            if id ~= "" and not seen[id] then seen[id] = true; out[#out + 1] = c end
+            addCam(out, seen, c)
         end
     end
     if not isCamActor and barred then
         if not alive(camClass) then camClass = StaticFindObject(CAM_CLASS) end
         if alive(camClass) then
-            local ok, c = pcall(function() return actor:GetComponentByClass(camClass) end)
+            local ok, c = pcall(_compByClass, actor, camClass)
             if ok and alive(c) then
-                local id = fullName(c)
-                if id ~= "" and not seen[id] then seen[id] = true; out[#out + 1] = c end
+                addCam(out, seen, c)
             end
         end
     end
@@ -254,12 +263,11 @@ end
 local lastId, lastCleared, reasserts = "", false, 0
 local warnedNoPcm, warnedNoCam = false, false
 local spawnSeen, spawnCleared = 0, 0   -- birth-clear tally, reported once per pass (plain numbers, never handles)
--- One pass: de-bar the active (and, mid-blend, the pending) camera. Fired by
--- events (camera spawn / cut / cinematic edges) with one delayed recheck, plus the
--- 5 s backstop. There is no continuous poll -- each call resolves one camera, acts,
--- and returns.
+-- One pass: de-bar the active (and, mid-blend, the pending) camera. Fired only by
+-- events (camera spawn / cut / cinematic edges) with one delayed recheck -- never on
+-- a timer. Each call resolves one camera, acts, and returns.
 local function enforceActiveCam()
-    if not (Cfg.Enabled and Cfg.RemoveCinematicBars) then return end
+    if not debarOn() then return end
     local pcm = cameraManager()
     if not pcm then
         if not warnedNoPcm then warnedNoPcm = true; log("active-camera chain unreadable (no PlayerCameraManager); de-bar idle") end
@@ -287,27 +295,35 @@ local function enforceActiveCam()
 end
 -- Triggers are event-driven: each cinematic edge / camera spawn / cut queues one
 -- immediate active-camera pass (coalesced, at most one in flight) plus one delayed
--- recheck to catch the view target settling a frame later. There is NO continuous
--- poll -- the only periodic work is the 5 s backstop, which does one active-camera
--- pass. A rare mid-cinematic hard cut onto a pre-existing camera (native
--- SetViewTarget: no hook, no spawn) is caught by that backstop within 5 s.
+-- recheck to catch the view target settling a frame later. The camera path is FULLY
+-- event-driven -- nothing on a timer sweeps it; the 5 s backstop is HUD-only. Bars are
+-- prevented at the source by the birth-clear at spawn, so the one unhooked path -- a
+-- native SetViewTarget hard cut onto an already-born camera -- needs no periodic catch:
+-- that camera was de-barred when it spawned. Were the game to re-assert the constraint
+-- with no event, the bars would persist rather than be popped seconds later -- the
+-- intended trade (a late correction reads worse than none). In-game runs show 0 re-asserts.
 local scanPending, recheckPending = false, false
+-- Callback bodies hoisted to named functions (they close over only module upvalues), so the
+-- coalesced trigger paths mint no per-call closure -- same idiom as _isValid/_vpSize above.
+local function _scanBody() scanPending = false; pcall(enforceActiveCam) end
+local function _recheckBody() recheckPending = false; pcall(enforceActiveCam) end
+local function _recheckFire()
+    if not pcall(ExecuteInGameThread, _recheckBody) then recheckPending = false end
+end
 local function scanCams()
     if scanPending then return end
     scanPending = true
-    if not pcall(ExecuteInGameThread, function() scanPending = false; pcall(enforceActiveCam) end) then
+    if not pcall(ExecuteInGameThread, _scanBody) then
         scanPending = false
     end
 end
 local function scheduleRecheck()
-    if recheckPending or not (Cfg.Enabled and Cfg.RemoveCinematicBars) or rawget(_G, "ExecuteWithDelay") == nil then return end
+    if recheckPending or not debarOn() or rawget(_G, "ExecuteWithDelay") == nil then return end
     recheckPending = true
-    if not pcall(ExecuteWithDelay, RECHECK_MS, function()
-        if not pcall(ExecuteInGameThread, function() recheckPending = false; pcall(enforceActiveCam) end) then recheckPending = false end
-    end) then recheckPending = false end
+    if not pcall(ExecuteWithDelay, RECHECK_MS, _recheckFire) then recheckPending = false end
 end
-local function beat()
-    if Cfg.Enabled then trace("trigger: backstop"); applyHud(false); enforceActiveCam() end
+local function beat()   -- the periodic backstop is HUD-only; the camera path is fully event-driven, never swept on a timer
+    if Cfg.Enabled then trace("trigger: backstop"); applyHud(false) end
 end
 local function toggle()
     Cfg.Enabled = not Cfg.Enabled
@@ -323,7 +339,7 @@ log("Dawnwalker Ultrawide %s loaded (HUD %s @ %.3f, de-bars %s @ any resolution)
     VERSION, tostring(Cfg.RecenterHUD), Cfg.HudAspect, tostring(Cfg.RemoveCinematicBars))
 pcall(function()
     NotifyOnNewObject(CAM_CLASS, function(cam)   -- preemptive: clear each camera the instant it is born, before any cut can view it
-        if Cfg.Enabled and Cfg.RemoveCinematicBars and alive(cam) then   -- fresh object, used synchronously, never stored
+        if debarOn() and alive(cam) then   -- fresh object, used synchronously, never stored
             spawnSeen = spawnSeen + 1            -- tallied here, reported once per pass; per-spawn logging would hitch the burst
             local okc, made = pcall(enforceCam, cam)
             if okc and type(made) == "number" and made > 0 then spawnCleared = spawnCleared + 1 end
@@ -332,7 +348,7 @@ pcall(function()
     end)
 end)
 local function onHudBuilt(w)   -- HUD (re)build == level/save load: recentre + clear the viewed camera; holds no reference
-    if not alive(w) or fullName(w):find("Default__", 1, true) then return end
+    if not alive(w) or isCDO(w) then return end
     trace("trigger: hud-load"); hudDirty = true; lastInset = nil; basePad = {}   -- old entries are for the destroyed HUD widget; recapture fresh
     ExecuteInGameThread(function() pcall(applyHud, true); pcall(enforceActiveCam) end)
 end
@@ -340,11 +356,12 @@ pcall(function()
     local ok = pcall(NotifyOnNewObject, HUD_PATH, onHudBuilt)
     log("hud-load trigger: %s", ok and "registered" or "UNAVAILABLE (HUD centred at startup and on resolution change only, not after a level load)")
 end)
+local function regStatus(ok) return ok and "registered" or "unavailable" end
 pcall(function()
     local okreg = pcall(RegisterHook, "/Script/Engine.PlayerController:ClientSetCinematicMode", function()
         trace("trigger: cinematic-mode"); scanCams(); scheduleRecheck()
     end)
-    log("hook ClientSetCinematicMode: %s", okreg and "registered" or "unavailable")
+    log("hook ClientSetCinematicMode: %s", regStatus(okreg))
 end)
 -- Cut edge, zero-frame path: the new view target is a hook parameter valid THIS
 -- tick, so the incoming camera is de-barred before its first frame draws. Only
@@ -352,9 +369,9 @@ end)
 -- sequencer hard cuts use native SetViewTarget and are caught by the recheck chain.
 pcall(function()
     local okreg = pcall(RegisterHook, "/Script/Engine.PlayerController:SetViewTargetWithBlend", function(_, p1)
-        if not (Cfg.Enabled and Cfg.RemoveCinematicBars) then return end
+        if not debarOn() then return end
         trace("trigger: view-target-blend")
-        local ok, actor = pcall(function() return p1:get() end)
+        local ok, actor = pcall(_get, p1)
         if ok and alive(actor) then
             local cams, seen = {}, {}
             camsOf(actor, cams, seen, true)
@@ -362,16 +379,17 @@ pcall(function()
         end
         scanCams(); scheduleRecheck()
     end)
-    log("hook SetViewTargetWithBlend: %s", okreg and "registered" or "unavailable")
+    log("hook SetViewTargetWithBlend: %s", regStatus(okreg))
 end)
 -- Game-native dialogue/cinematic edges (present in Dawnwalker.exe); best effort,
 -- silently skipped if not hookable. Each costs one coalesced pass plus one recheck,
 -- so all are kept as cheap belt-and-suspenders alongside ClientSetCinematicMode.
 for _, fn in ipairs({ "CinematicModeStarted", "CinematicModeFinished" }) do
+    local tag = "trigger: " .. fn   -- built once per registration; the callback would otherwise concat this on every fire, even with Trace off
     local okreg = pcall(RegisterHook, "/Script/Dawnwalker.DawnwalkerDialogueSubsystem:" .. fn, function()
-        trace("trigger: " .. fn); scanCams(); scheduleRecheck()
+        trace(tag); scanCams(); scheduleRecheck()
     end)
-    log("hook %s: %s", fn, okreg and "registered" or "unavailable")
+    log("hook %s: %s", fn, regStatus(okreg))
 end
 if Cfg.ToggleKey ~= "" and rawget(_G, "RegisterKeyBind") and rawget(_G, "Key") and rawget(_G, "IsKeyBindRegistered") then
     pcall(function() local k = Key[Cfg.ToggleKey:upper()]

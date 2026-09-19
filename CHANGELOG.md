@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.4 — 2026-09-19
+
+### Changed
+- **Cinematic bars are now cleared purely on events — the camera is never swept on a
+  timer.** Bars are already prevented at the source (each camera is de-barred the
+  instant it is created), so the periodic safety pass over the active camera was
+  removed: in testing it never did useful work (no camera was ever found barred), and
+  in a missed-event case its only effect would have been to pop bars away a few seconds
+  after they appeared, which reads worse than a clean, consistent frame. The cinematic
+  path now does zero steady-state work. The slow HUD re-centre backstop is kept: it is
+  what catches a resolution or window change (which fires no event) and never causes a
+  visible flash.
+
 ## 1.0.3 — 2026-09-17
 
 A major reliability and correctness overhaul — the first update since 1.0.1. The
