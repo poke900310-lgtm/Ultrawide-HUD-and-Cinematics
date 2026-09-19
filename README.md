@@ -74,7 +74,8 @@ keeps the authored vertical FOV and widens horizontally.
 - Do **not** run it together with another ultrawide mod; they act on the same
   cameras and HUD and will fight.
 - Reacts to cinematic transitions and camera spawns, so bars are cleared the
-  instant a cut happens; a slow backstop timer re-asserts and adapts to a
+  instant a cut happens — the cinematic path is fully event-driven and is never
+  re-checked on a timer. A slow backstop only re-centers the HUD after a
   resolution change. There is no per-frame work.
 
 ## Known limitations
