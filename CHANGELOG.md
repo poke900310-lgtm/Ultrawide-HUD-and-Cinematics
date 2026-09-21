@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.0.5 — 2026-09-21
+
+### Fixed
+- **Cinematic cameras that spawn mid-scene no longer stay letterboxed after a hard
+  cut.** Some cutscene cameras were re-barred by the engine just after they were
+  created, so a later cut onto one showed the black bars for several seconds. Every
+  camera is now cleared the moment its actor spawns — after the engine copies the
+  camera template — so the bars never appear.
+- **A brief Frame-Rate-Limit read glitch can no longer remove your FPS cap.** When
+  lifting the cinematic render cap, if your in-game Frame Rate Limit momentarily could
+  not be read the mod fell back to unlimited — and because the cap is applied at console
+  priority, that stuck for the rest of the session. It now leaves your cap untouched
+  when the setting can't be read.
+- **A malformed `HudAspect` ratio can no longer collapse the HUD.** A degenerate value
+  such as `0:9` is now rejected (as a too-small plain number already was) instead of
+  being applied.
+
+### Added
+- **Cutscene frame-rate uncap** (`UncapCinematicFps`, on by default). The game clamps
+  rendering to 30 fps when a cinematic starts and steps cutscene animation at 30. The
+  mod now lifts the render cap to your own in-game Frame Rate Limit (left at your current
+  cap if that setting can't be read) and steps cutscene animation at `CinematicAnimFps`
+  (60 by default). VSync is never touched. Purely event-driven: it acts on the
+  cinematic-mode edges plus one coalesced delayed follow-up, with a single bounded lookup
+  per cinematic start and no per-frame or timer work. Turn it off to leave cinematics at
+  30 fps.
+
+### Changed
+- Internal source tidy-up (dead diagnostics removed, shared code factored, trace
+  formatting hardened); no change to HUD or bar-removal behaviour.
+
 ## 1.0.4 — 2026-09-19
 
 ### Changed

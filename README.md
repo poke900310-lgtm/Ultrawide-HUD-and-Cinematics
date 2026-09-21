@@ -11,6 +11,10 @@ mod:
   rest with black bars. This removes the constraint and widens the field of view
   horizontally, so the full ultrawide image is rendered — real scene at the sides,
   not a stretched or cropped 16:9.
+- **Cutscene frame rate uncapped.** The game renders cutscenes at 30 fps and steps
+  their animation at 30. This lifts the render cap to your own in-game Frame Rate
+  Limit and steps cutscene animation at 60, so cinematics play smoothly. VSync is
+  left untouched.
 
 It works at **any resolution and aspect**: the inset is computed from the live
 viewport, so 21:9, 32:9, 48:9 and windowed sizes all work, and at exactly 16:9 it
@@ -51,6 +55,8 @@ startup; restart after editing.
 | `RecenterHUD` | `true` | Turn off to leave the HUD alone and only fix cinematics. |
 | `RemoveCinematicBars` | `true` | Remove the 16:9 bars from cinematics. |
 | `KeepVerticalFov` | `true` | Widen horizontally (reveal scene). `false` keeps horizontal FOV and crops top/bottom — rarely wanted. |
+| `UncapCinematicFps` | `true` | Lift the game's 30 fps cinematic cap: rendering follows your in-game Frame Rate Limit (left at your current cap if it can't be read), animation steps at `CinematicAnimFps`. VSync untouched. |
+| `CinematicAnimFps` | `60` | Frame rate cutscene animation is stepped at while `UncapCinematicFps` is on. Whole number. |
 | `ToggleKey` | *(none)* | Optional UE4SS key name (e.g. `INS`) to toggle the mod in game. |
 | `Verbose` | `false` | Also write `Ultrawide.log` beside `main.lua`. |
 | `Trace` | `false` | Extra diagnostic lines (camera passes, HUD padding capture, hook firings) for bug reports. Combine with `Verbose` to capture them in the log. |
@@ -65,12 +71,18 @@ has no canvas anchors — its containers are box-aligned against the viewport �
 the fix adds equal left/right padding to each container's slot, which recentres
 every alignment type without scaling. The bars are `bConstrainAspectRatio` on the
 active cine camera; clearing it with `AspectRatioAxisConstraint = MaintainYFOV`
-keeps the authored vertical FOV and widens horizontally.
+keeps the authored vertical FOV and widens horizontally. Separately, the game clamps
+`t.MaxFPS` to 30 and frame-locks the cutscene sequence players at 30 when a cinematic
+starts; the mod resets the cap to your own Frame Rate Limit and raises the sequence
+player's frame rate to `CinematicAnimFps`, on the cinematic edges only — one bounded
+lookup per start, no polling.
 
 ## Compatibility
 
-- Runs alongside other Dawnwalker mods; it only writes UMG slot padding and camera
-  aspect properties.
+- Runs alongside other Dawnwalker mods; it writes UMG slot padding, camera aspect
+  properties, and — during cinematics — the `t.MaxFPS` cap and the cutscene sequence
+  player's frame rate. If another mod or your `Engine.ini` manages `t.MaxFPS`, set
+  `UncapCinematicFps = false`.
 - Do **not** run it together with another ultrawide mod; they act on the same
   cameras and HUD and will fight.
 - Reacts to cinematic transitions and camera spawns, so bars are cleared the
