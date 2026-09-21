@@ -90,4 +90,41 @@ be left alone — widening them would stretch.
   turns out to be a pure widget, a tiny optional `.pak` is offered for people
   without UE4SS, exactly as AutoQTE ships two editions.
 
-Nothing here is committed or installed yet; the game folder is stock.
+## Confirmed in game (shipped as 1.0.5)
+
+The probes above were run in game and the mod was built and released; the open
+questions resolve as follows.
+
+**Problem 1 — CONFIRMED.** The working lever is equal left/right **padding on each
+HUD container's slot** (not a single root write): every box-aligned child then
+falls back to its 16:9 position without scaling. Each container's original padding
+is captured once and only the recentre inset is added to the sides, so the game's
+own top/bottom spacing is preserved and turning the mod off restores it exactly.
+It re-applies on HUD rebuild (level load) and on resolution change. Confirmed from
+16:9 up to 48:9 and windowed.
+
+**Problem 2 — CONFIRMED: it is the camera aspect constraint, not the overlay
+widget.** In cinematics the bars are drawn by `bConstrainAspectRatio` on the live
+cine camera and sit *behind* the HUD/subtitles, and the scene beyond 16:9 is
+genuinely rendered — widening reveals real world, no stretch. The fix clears
+`bConstrainAspectRatio` and sets `AspectRatioAxisConstraint = MaintainYFOV`
+(keep authored vertical FOV, widen horizontally) on the active camera. The engine
+re-bars cameras that spawn *mid-scene*, so the decisive write is done the instant
+each `CameraActor` is created (`NotifyOnNewObject`), after the engine copies the
+camera template — this is what stops bars flashing in on a hard cut. The
+`WBP_QuestLevelSequenceOverlay` letterbox widget is **not** the mechanism and is
+left untouched. Prerendered Bink cutscenes are left alone as planned.
+
+**Problem 3 (added in 1.0.5) — cinematics are locked to 30 fps in two layers.**
+On cinematic start the game clamps `t.MaxFPS` to 30 (render) and its cutscene
+sequence players are frame-locked at a 30/1 display rate (animation). The mod, on
+the cinematic-mode edges only, resets `t.MaxFPS` to the player's own in-game Frame
+Rate Limit (leaving it untouched if that value can't be read) and raises the
+`CinematicNodeLevelSequencePlayer` frame rate to `CinematicAnimFps` (60 by
+default). Per-mesh Update Rate Optimization (the engine's distant-object animation
+throttling) is a separate mechanism and is never touched, so distant actors keep
+their normal LOD stepping. VSync is never written.
+
+**Status:** released as 1.0.5 — Nexus mod 484 and the GitHub repository. The design
+stayed a single UE4SS Lua mod; no `.pak` edition was needed, since both bar removal
+and the frame-rate uncap require the live runtime.
